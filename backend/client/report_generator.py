@@ -122,58 +122,73 @@ def _add_pie_chart(doc: Document, labels: list[str], values: list[float], title:
         return False
     
     lbls, vals = zip(*non_zero)
+    total = sum(vals)
     
-    # Attractive colors matching the brand palette
-    colors = ['#ff4d4d', '#4d4dff', '#4dff4d', '#ffff4d', '#ff4dff', '#4dffff', '#ff994d', '#994dff']
+    # Attractive, modern colors matching a premium brand palette
+    colors = [
+        '#0d9488', # Teal
+        '#4f46e5', # Indigo
+        '#f43f5e', # Rose
+        '#d97706', # Amber
+        '#10b981', # Emerald
+        '#8b5cf6', # Purple
+        '#06b6d4', # Sky
+        '#ea580c'  # Orange
+    ]
     
-    fig, ax = plt.subplots(figsize=(6, 4.5))
+    fig, ax = plt.subplots(figsize=(7.2, 4.0), dpi=150)
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
     
-    # 3D shadow effect matching the second image
+    # Display percentages inside wedges only if they are > 4% to avoid crowding
+    def my_autopct(pct):
+        return f'{pct:.1f}%' if pct > 4 else ''
+    
     wedges, texts, autotexts = ax.pie(
         vals,
-        autopct='%1.1f%%',
-        pctdistance=0.75,
+        autopct=my_autopct,
+        pctdistance=0.7,
         startangle=140,
         colors=colors[:len(vals)],
-        shadow=True,
-        wedgeprops=dict(edgecolor='gray', linewidth=0.5)
+        wedgeprops=dict(edgecolor='white', linewidth=1.5, antialiased=True)
     )
     
-    plt.setp(autotexts, size=8, weight="bold", color="white")
-    plt.setp(texts, size=0)
+    plt.setp(autotexts, size=9, weight="bold", color="white")
     
-    for i, p in enumerate(wedges):
-        ang = (p.theta2 - p.theta1)/2. + p.theta1
-        y = np.sin(np.deg2rad(ang))
-        x = np.cos(np.deg2rad(ang))
-        
-        horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))]
-        connectionstyle = f"angle,angleA=0,angleB={ang}"
-        
-        val_str = format_inr(vals[i]).replace("₹", "")
-        
-        ax.annotate(
-            f"{lbls[i]}:\n{val_str}",
-            xy=(x * 0.95, y * 0.95),
-            xytext=(1.25 * np.sign(x), 1.25 * y),
-            horizontalalignment=horizontalalignment,
-            arrowprops=dict(arrowstyle="-", connectionstyle=connectionstyle, color="black", lw=0.5),
-            bbox=dict(boxstyle="square,pad=0.3", fc="#FFFFE0", ec="black", lw=0.5),
-            fontsize=8
-        )
-        
-    ax.set_title(title, fontsize=11, fontweight="bold", pad=20)
+    # Build cleanly formatted labels for the legend
+    legend_labels = []
+    for l, v in zip(lbls, vals):
+        pct = (v / total) * 100
+        val_str = format_inr(v)
+        legend_labels.append(f"{l}: {val_str} ({pct:.1f}%)")
+    
+    # Position the legend on the right of the pie chart
+    ax.legend(
+        wedges,
+        legend_labels,
+        title="Categories",
+        loc="center left",
+        bbox_to_anchor=(0.95, 0.5),
+        frameon=True,
+        facecolor='#f8fafc',
+        edgecolor='#e2e8f0',
+        fontsize=9
+    )
+    
+    ax.set_title(title, fontsize=11, fontweight="bold", pad=15)
     plt.tight_layout()
     
     img_stream = io.BytesIO()
-    plt.savefig(img_stream, format='png', dpi=150)
+    # Save with bbox_inches='tight' to prevent any part of the legend or title from being cut off
+    plt.savefig(img_stream, format='png', dpi=150, bbox_inches='tight')
     plt.close(fig)
     img_stream.seek(0)
     
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
-    run.add_picture(img_stream, width=Inches(5.0))
+    # Insert the picture at a width of 5.5 inches for clean presentation
+    run.add_picture(img_stream, width=Inches(5.5))
     return True
 
 

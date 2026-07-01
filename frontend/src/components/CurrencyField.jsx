@@ -23,7 +23,11 @@ export default function CurrencyField({
       InputProps={{
         startAdornment: <InputAdornment position="start">₹</InputAdornment>,
       }}
-      inputProps={{ min: 0, step: 'any' }}
+      inputProps={{
+        min: 0,
+        step: 'any',
+        onWheel: (e) => e.target.blur(),
+      }}
       {...rest}
     />
   );

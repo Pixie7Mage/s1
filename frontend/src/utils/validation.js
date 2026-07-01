@@ -275,10 +275,15 @@ export function buildClientPayload(formState) {
       Object.entries(formState.emergencyFund).map(([k, v]) => [k, parseAmount(v)]),
     ),
     assumptions: Object.fromEntries(
-      Object.entries(formState.assumptions).map(([k, v]) => [
-        k,
-        k === 'emergencyFundMonths' ? Number(v) : parseAmount(v),
-      ]),
+      Object.entries(formState.assumptions).map(([k, v]) => {
+        if (k === 'emergencyFundMonths') {
+          return [k, Number(v)];
+        }
+        if (k === 'riskProfile') {
+          return [k, String(v)];
+        }
+        return [k, parseAmount(v)];
+      }),
     ),
   };
 }

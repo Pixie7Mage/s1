@@ -63,6 +63,16 @@ export default function AssumptionsPage() {
             <FormControlLabel value="12" control={<Radio />} label="12 months" />
           </RadioGroup>
         </FormControl>
+
+        <TextField
+          fullWidth
+          multiline
+          rows={6}
+          label="Your Risk Profile Description"
+          value={assumptions.riskProfile || ''}
+          onChange={(e) => updateAssumptions('riskProfile', e.target.value)}
+          helperText="Describe your risk taking profile and capacity (Conservative, Moderate, Aggressive)."
+        />
       </Stack>
 
       <WizardNav currentPath="/assumptions" onNext={() => handleNext(formState)} />

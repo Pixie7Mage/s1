@@ -79,6 +79,16 @@ export const initialFormState = {
     fd: '',
     cash: '',
     savingsAccount: '',
+    postalSavings: '',
+    eps: '',
+    amountReceivable: '',
+    commodity: '',
+    car: '',
+    bike: '',
+    jewellery: '',
+    otherFixed: '',
+    extraFinancial: [],
+    extraFixed: [],
   },
   liabilities: {
     homeLoan: '',
@@ -87,6 +97,7 @@ export const initialFormState = {
     goldLoan: '',
     creditCard: '',
     bankOverdraft: '',
+    extra: [],
   },
   goals: [],
   investments: {
@@ -100,12 +111,14 @@ export const initialFormState = {
     ulip: '',
     endowment: '',
     others: '',
+    extra: [],
   },
   emergencyFund: {
     cash: '',
     savingsAccount: '',
     liquidMutualFunds: '',
     fixedDeposits: '',
+    extra: [],
   },
   assumptions: {
     inflation: '6',
@@ -114,6 +127,7 @@ export const initialFormState = {
     gold: '8',
     lifeExpectancy: '85',
     emergencyFundMonths: '6',
+    riskProfile: '',
   },
 };
 

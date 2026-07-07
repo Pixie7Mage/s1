@@ -59,25 +59,10 @@ export function calcNetWorth(assets, liabilities) {
 
 export function calcGoalMetrics(goal, assumptions = {}) {
   const currentCost = parseAmount(goal.currentCost);
-  const existingInvestment = parseAmount(goal.existingInvestment);
-  const inflationRate = parseAmount(goal.inflationRate || assumptions.inflation || 6);
-  const targetYear = parseAmount(goal.targetYear);
-  const currentYear = new Date().getFullYear();
-  const years = Math.max(0, targetYear - currentYear);
+  const targetCorpus = parseAmount(goal.targetCorpus);
+  const interest = parseAmount(goal.interest);
 
-  const futureCost =
-    years === 0 ? currentCost : currentCost * (1 + inflationRate / 100) ** years;
-  const targetCorpus = futureCost;
-  const fundingPct = futureCost > 0 ? (existingInvestment / futureCost) * 100 : 0;
-  const corpusGap = Math.max(0, futureCost - existingInvestment);
-
-  let status = 'Not Started';
-  if (futureCost === 0) status = 'Not Started';
-  else if (fundingPct >= 80) status = 'On Track';
-  else if (fundingPct >= 50) status = 'Needs Attention';
-  else status = 'Critical';
-
-  return { futureCost, targetCorpus, fundingPct, corpusGap, status, years };
+  return { currentCost, targetCorpus, interest };
 }
 
 export function calcStockCurrentValue(stock) {
@@ -94,37 +79,8 @@ export function calcMfProfitLoss(mf) {
   return parseAmount(mf.currentValue) - parseAmount(mf.investedAmount);
 }
 
-export function calcPortfolioCagr(investments) {
-  const items = [];
-  const today = new Date();
-
-  (investments?.mutualFunds || []).forEach((mf) => {
-    const invested = parseAmount(mf.investedAmount);
-    const current = parseAmount(mf.currentValue);
-    const date = mf.investmentDate ? new Date(mf.investmentDate) : null;
-    if (invested > 0 && current > 0 && date && !Number.isNaN(date.getTime())) {
-      const years = (today - date) / (365.25 * 24 * 60 * 60 * 1000);
-      if (years > 0) items.push({ invested, current, years });
-    }
-  });
-
-  (investments?.stocks || []).forEach((stock) => {
-    const qty = parseAmount(stock.quantity);
-    const invested = qty * parseAmount(stock.avgBuyPrice);
-    const current = qty * parseAmount(stock.currentMarketPrice);
-    if (invested > 0 && current > 0) {
-      items.push({ invested, current, years: 3 });
-    }
-  });
-
-  if (items.length === 0) return null;
-
-  const totalInvested = items.reduce((s, i) => s + i.invested, 0);
-  const totalCurrent = items.reduce((s, i) => s + i.current, 0);
-  const avgYears = items.reduce((s, i) => s + i.years * i.invested, 0) / totalInvested;
-
-  if (avgYears <= 0 || totalInvested <= 0) return null;
-  return ((totalCurrent / totalInvested) ** (1 / avgYears) - 1) * 100;
+export function calcPortfolioCagr() {
+  return null;
 }
 
 export function calcRecommendedTermCover(totalAnnualIncome, totalLiabilities) {
@@ -136,13 +92,21 @@ export function calcRecommendedHealthCover(familyMemberCount) {
   return base + Math.max(0, familyMemberCount - 1) * 300000;
 }
 
-export function calcEmergencyFundAvailable(emergencyFund) {
-  if (!emergencyFund) return 0;
-  return Object.values(emergencyFund).reduce((sum, val) => sum + parseAmount(val), 0);
+export function calcEmergencyFundAvailable(assets) {
+  if (!assets) return 0;
+  return (
+    parseAmount(assets.savingsAccount) +
+    parseAmount(assets.cash) +
+    parseAmount(assets.sweepInFd) +
+    parseAmount(assets.liquidMutualFund) +
+    parseAmount(assets.moneyMarketFund) +
+    parseAmount(assets.overnightMutualFund)
+  );
 }
 
-export function calcEmergencyFundRequired(annualExpenses, months) {
-  return (annualExpenses / 12) * parseAmount(months || 6);
+export function calcEmergencyFundRequired(emergencyFund) {
+  if (!emergencyFund) return 0;
+  return parseAmount(emergencyFund.requiredFund);
 }
 
 export function calcInvestmentTotals(investments) {
@@ -171,5 +135,26 @@ export function calcInvestmentTotals(investments) {
     totalInvested: mfInvested + stockInvested,
     totalCurrent: mfCurrent + stockCurrent,
     totalProfitLoss: mfCurrent + stockCurrent - (mfInvested + stockInvested),
+  };
+}
+
+export function getDerivedAssets(formState) {
+  if (!formState) return {};
+  const assets = formState.assets || {};
+  const investments = formState.investments || {};
+  const totals = calcInvestmentTotals(investments);
+  
+  const stocks = (assets.stocks !== undefined && assets.stocks !== null && assets.stocks !== '')
+    ? assets.stocks
+    : String(totals.stockCurrent || '0');
+    
+  const mutualFunds = (assets.mutualFunds !== undefined && assets.mutualFunds !== null && assets.mutualFunds !== '')
+    ? assets.mutualFunds
+    : String(totals.mfCurrent || '0');
+
+  return {
+    ...assets,
+    stocks,
+    mutualFunds,
   };
 }

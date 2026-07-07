@@ -17,8 +17,6 @@ import WizardLayout from '../components/WizardLayout';
 import WizardNav from '../components/WizardNav';
 import { GOAL_TEMPLATES, useClientForm } from '../context/ClientFormContext';
 import { useWizardStep } from '../hooks/useWizardStep';
-import { calcGoalMetrics } from '../utils/calculations';
-import { formatINR, formatPercent } from '../utils/currency';
 import { getStepIndex } from '../utils/wizardRoutes';
 
 export default function GoalsPage() {
@@ -55,14 +53,7 @@ export default function GoalsPage() {
       ) : (
         <Stack spacing={2.5}>
           {goals.map((goal, index) => {
-            const metrics = calcGoalMetrics(goal, assumptions);
             const goalErrors = errors[goal.id] || {};
-            const statusColor =
-              metrics.status === 'On Track'
-                ? 'success'
-                : metrics.status === 'Needs Attention'
-                  ? 'warning'
-                  : 'error';
 
             return (
               <Box
@@ -76,10 +67,7 @@ export default function GoalsPage() {
                 }}
               >
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="subtitle2">Goal {index + 1}</Typography>
-                    <Chip label={metrics.status} size="small" color={statusColor} />
-                  </Stack>
+                  <Typography variant="subtitle2">Goal {index + 1}</Typography>
                   <IconButton size="small" color="error" onClick={() => removeGoal(goal.id)}>
                     <DeleteOutlineOutlinedIcon fontSize="small" />
                   </IconButton>
@@ -106,70 +94,27 @@ export default function GoalsPage() {
                       error={goalErrors.currentCost}
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <CurrencyField
+                      required
+                      label="Target Corpus"
+                      value={goal.targetCorpus}
+                      onChange={(e) => updateGoal(goal.id, 'targetCorpus', e.target.value)}
+                      error={goalErrors.targetCorpus}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       fullWidth
                       required
                       type="number"
-                      label="Target Year"
-                      value={goal.targetYear}
-                      onChange={(e) => updateGoal(goal.id, 'targetYear', e.target.value)}
-                      error={Boolean(goalErrors.targetYear)}
-                      helperText={goalErrors.targetYear}
-                      inputProps={{ min: new Date().getFullYear() }}
+                      label="Interest %"
+                      value={goal.interest}
+                      onChange={(e) => updateGoal(goal.id, 'interest', e.target.value)}
+                      error={Boolean(goalErrors.interest)}
+                      helperText={goalErrors.interest}
+                      inputProps={{ min: 0, max: 100, step: 0.1 }}
                     />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Expected Inflation %"
-                      value={goal.inflationRate}
-                      onChange={(e) => updateGoal(goal.id, 'inflationRate', e.target.value)}
-                      inputProps={{ min: 0, max: 30, step: 0.1 }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <CurrencyField
-                      label="Existing Investment"
-                      value={goal.existingInvestment}
-                      onChange={(e) => updateGoal(goal.id, 'existingInvestment', e.target.value)}
-                    />
-                  </Grid>
-                </Grid>
-
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Future Cost
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {formatINR(metrics.futureCost)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Target Corpus
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {formatINR(metrics.targetCorpus)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Funding
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
-                      {formatPercent(metrics.fundingPct)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Corpus Gap
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600} color="error.main">
-                      {formatINR(metrics.corpusGap)}
-                    </Typography>
                   </Grid>
                 </Grid>
               </Box>

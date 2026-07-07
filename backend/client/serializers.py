@@ -104,21 +104,9 @@ class GoalSerializer(serializers.Serializer):
 
     current_cost = serializers.FloatField(min_value=0, required=False, default=0)
 
-    target_year = serializers.IntegerField(required=False)
+    target_corpus = serializers.FloatField(min_value=0, required=False, default=0)
 
-    inflation_rate = serializers.FloatField(required=False, default=6)
-
-    existing_investment = serializers.FloatField(min_value=0, required=False, default=0)
-
-    future_cost = serializers.FloatField(required=False, default=0)
-
-    target_corpus = serializers.FloatField(required=False, default=0)
-
-    funding_pct = serializers.FloatField(required=False, default=0)
-
-    corpus_gap = serializers.FloatField(required=False, default=0)
-
-    status = serializers.CharField(required=False, allow_blank=True)
+    interest = serializers.FloatField(min_value=0, required=False, default=0)
 
 
 
@@ -132,7 +120,7 @@ class MutualFundSerializer(serializers.Serializer):
 
     current_value = serializers.FloatField(min_value=0, required=False, default=0)
 
-    investment_date = serializers.DateField(required=False, allow_null=True)
+    xirr = serializers.FloatField(required=False, default=0)
 
     profit_loss = serializers.FloatField(required=False, default=0)
 
@@ -152,6 +140,8 @@ class StockSerializer(serializers.Serializer):
 
     current_value = serializers.FloatField(required=False, default=0)
 
+    xirr = serializers.FloatField(required=False, default=0)
+
     profit_loss = serializers.FloatField(required=False, default=0)
 
 
@@ -168,28 +158,30 @@ class InvestmentsSerializer(serializers.Serializer):
 
 
 
+class EmergencyFundItemSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=200)
+    amount = serializers.FloatField(min_value=0, required=False, default=0)
+    required = serializers.FloatField(min_value=0, required=False, default=0)
+    gap = serializers.FloatField(required=False, default=0)
+    where_to_invest = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
+
+
+class EmergencyFundSerializer(serializers.Serializer):
+    required_fund = serializers.FloatField(min_value=0, required=False, default=0)
+    items = EmergencyFundItemSerializer(many=True, required=False, default=list)
+
+
 class ClientPayloadSerializer(serializers.Serializer):
-
     personal = PersonalDetailsSerializer()
-
     family_members = FamilyMemberSerializer(many=True, required=False, default=list)
-
     income = IncomeSerializer(required=False)
-
     expenses = ExpensesSerializer(required=False)
-
     assets = serializers.DictField(required=False, default=dict)
-
     liabilities = serializers.DictField(required=False, default=dict)
-
     goals = GoalSerializer(many=True, required=False, default=list)
-
     investments = InvestmentsSerializer(required=False)
-
     insurance = serializers.DictField(required=False, default=dict)
-
-    emergency_fund = serializers.DictField(required=False, default=dict)
-
+    emergency_fund = EmergencyFundSerializer(required=False)
     assumptions = serializers.DictField(required=False, default=dict)
 
 

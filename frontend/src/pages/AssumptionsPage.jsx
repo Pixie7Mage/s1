@@ -68,10 +68,10 @@ export default function AssumptionsPage() {
           fullWidth
           multiline
           rows={6}
-          label="Your Risk Profile Description"
-          value={assumptions.riskProfile || ''}
-          onChange={(e) => updateAssumptions('riskProfile', e.target.value)}
-          helperText="Describe your risk taking profile and capacity (Conservative, Moderate, Aggressive)."
+          label="Client Review"
+          value={assumptions.clientReview || ''}
+          onChange={(e) => updateAssumptions('clientReview', e.target.value)}
+          helperText="Provide a review of the client's profile, requirements, and investment constraints."
         />
       </Stack>
 

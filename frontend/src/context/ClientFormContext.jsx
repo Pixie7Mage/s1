@@ -7,9 +7,8 @@ const createEmptyGoal = (overrides = {}) => ({
   name: '',
   templateKey: '',
   currentCost: '',
-  targetYear: String(new Date().getFullYear() + 10),
-  inflationRate: '6',
-  existingInvestment: '',
+  targetCorpus: '',
+  interest: '',
   ...overrides,
 });
 
@@ -18,7 +17,7 @@ const createEmptyMutualFund = () => ({
   schemeName: '',
   investedAmount: '',
   currentValue: '',
-  investmentDate: '',
+  xirr: '',
 });
 
 const createEmptyStock = () => ({
@@ -27,6 +26,7 @@ const createEmptyStock = () => ({
   quantity: '',
   avgBuyPrice: '',
   currentMarketPrice: '',
+  xirr: '',
 });
 
 export const GOAL_TEMPLATES = [
@@ -77,6 +77,10 @@ export const initialFormState = {
     realEstate: '',
     esops: '',
     fd: '',
+    sweepInFd: '',
+    liquidMutualFund: '',
+    moneyMarketFund: '',
+    overnightMutualFund: '',
     cash: '',
     savingsAccount: '',
     postalSavings: '',
@@ -104,21 +108,29 @@ export const initialFormState = {
     mutualFunds: [],
     stocks: [],
   },
-  insurance: {
-    termCover: '',
-    healthCover: '',
-    lic: '',
-    ulip: '',
-    endowment: '',
-    others: '',
-    extra: [],
-  },
+  insurance: [
+    {
+      id: crypto.randomUUID(),
+      policyType: 'Term Insurance',
+      existingCover: '',
+      recommendedCover: '',
+      premium: '',
+      premiumTenure: '',
+      comment: '',
+    },
+    {
+      id: crypto.randomUUID(),
+      policyType: 'Health Insurance',
+      existingCover: '',
+      recommendedCover: '',
+      premium: '',
+      premiumTenure: '',
+      comment: '',
+    },
+  ],
   emergencyFund: {
-    cash: '',
-    savingsAccount: '',
-    liquidMutualFunds: '',
-    fixedDeposits: '',
-    extra: [],
+    requiredFund: '',
+    items: [],
   },
   assumptions: {
     inflation: '6',
@@ -127,7 +139,7 @@ export const initialFormState = {
     gold: '8',
     lifeExpectancy: '85',
     emergencyFundMonths: '6',
-    riskProfile: '',
+    clientReview: '',
   },
 };
 
@@ -314,12 +326,10 @@ export function ClientFormProvider({ children }) {
   }, []);
 
   const addGoal = useCallback((template = null) => {
-    const year = new Date().getFullYear();
     const overrides = template
       ? {
           name: template.name,
           templateKey: template.key,
-          targetYear: String(year + template.targetYearOffset),
         }
       : {};
     setFormState((prev) => ({
@@ -406,17 +416,85 @@ export function ClientFormProvider({ children }) {
     }));
   }, []);
 
-  const updateInsurance = useCallback((field, value) => {
+  const updateInsurancePolicy = useCallback((id, field, value) => {
     setFormState((prev) => ({
       ...prev,
-      insurance: { ...prev.insurance, [field]: value },
+      insurance: (prev.insurance || []).map((pol) =>
+        pol.id === id ? { ...pol, [field]: value } : pol
+      ),
     }));
   }, []);
 
-  const updateEmergencyFund = useCallback((field, value) => {
+  const addInsurancePolicy = useCallback((type = '') => {
+    setFormState((prev) => ({
+      ...prev,
+      insurance: [
+        ...(prev.insurance || []),
+        {
+          id: crypto.randomUUID(),
+          policyType: type,
+          existingCover: '',
+          recommendedCover: '',
+          premium: '',
+          premiumTenure: '',
+          comment: '',
+        },
+      ],
+    }));
+  }, []);
+
+  const removeInsurancePolicy = useCallback((id) => {
+    setFormState((prev) => ({
+      ...prev,
+      insurance: (prev.insurance || []).filter((pol) => pol.id !== id),
+    }));
+  }, []);
+
+  const updateEmergencyFundGlobal = useCallback((field, value) => {
     setFormState((prev) => ({
       ...prev,
       emergencyFund: { ...prev.emergencyFund, [field]: value },
+    }));
+  }, []);
+
+  const addEmergencyFundItem = useCallback(() => {
+    setFormState((prev) => ({
+      ...prev,
+      emergencyFund: {
+        ...prev.emergencyFund,
+        items: [
+          ...prev.emergencyFund.items,
+          {
+            id: crypto.randomUUID(),
+            name: '',
+            amount: '',
+            required: '',
+            whereToInvest: '',
+          },
+        ],
+      },
+    }));
+  }, []);
+
+  const removeEmergencyFundItem = useCallback((id) => {
+    setFormState((prev) => ({
+      ...prev,
+      emergencyFund: {
+        ...prev.emergencyFund,
+        items: prev.emergencyFund.items.filter((item) => item.id !== id),
+      },
+    }));
+  }, []);
+
+  const updateEmergencyFundItem = useCallback((id, field, value) => {
+    setFormState((prev) => ({
+      ...prev,
+      emergencyFund: {
+        ...prev.emergencyFund,
+        items: prev.emergencyFund.items.map((item) =>
+          item.id === id ? { ...item, [field]: value } : item
+        ),
+      },
     }));
   }, []);
 
@@ -459,8 +537,13 @@ export function ClientFormProvider({ children }) {
       addStock,
       removeStock,
       updateStock,
-      updateInsurance,
-      updateEmergencyFund,
+      updateInsurancePolicy,
+      addInsurancePolicy,
+      removeInsurancePolicy,
+      updateEmergencyFundGlobal,
+      addEmergencyFundItem,
+      removeEmergencyFundItem,
+      updateEmergencyFundItem,
       updateAssumptions,
       resetForm,
     }),
@@ -491,8 +574,13 @@ export function ClientFormProvider({ children }) {
       addStock,
       removeStock,
       updateStock,
-      updateInsurance,
-      updateEmergencyFund,
+      updateInsurancePolicy,
+      addInsurancePolicy,
+      removeInsurancePolicy,
+      updateEmergencyFundGlobal,
+      addEmergencyFundItem,
+      removeEmergencyFundItem,
+      updateEmergencyFundItem,
       updateAssumptions,
       resetForm,
     ],

@@ -8,11 +8,16 @@ import WizardNav from '../components/WizardNav';
 import { useClientForm } from '../context/ClientFormContext';
 import { useWizardStep } from '../hooks/useWizardStep';
 import { getStepIndex } from '../utils/wizardRoutes';
+import { getDerivedAssets } from '../utils/calculations';
 
 const FINANCIAL_FIELDS = [
-  { key: 'cash', label: 'Cash' },
+  { key: 'cash', label: 'Cash at Home (small amount)' },
   { key: 'savingsAccount', label: 'Savings Account' },
+  { key: 'sweepInFd', label: 'Sweep-in Fixed Deposit' },
   { key: 'fd', label: 'Fixed Deposits (FD)' },
+  { key: 'liquidMutualFund', label: 'Liquid Mutual Fund' },
+  { key: 'moneyMarketFund', label: 'Money Market Fund' },
+  { key: 'overnightMutualFund', label: 'Overnight Mutual Fund' },
   { key: 'stocks', label: 'Stocks' },
   { key: 'mutualFunds', label: 'Mutual Funds' },
   { key: 'esops', label: 'ESOPs' },
@@ -34,7 +39,7 @@ const FIXED_FIELDS = [
 
 export default function AssetsPage() {
   const { formState, updateAssets } = useClientForm();
-  const { assets } = formState;
+  const assets = getDerivedAssets(formState);
   const { snackbar, handleNext, closeSnackbar } = useWizardStep('/assets');
 
   // Calculates the sum of a list of predefined keys
@@ -104,15 +109,19 @@ export default function AssetsPage() {
         <Stack spacing={2.5}>
           <Typography variant="h5" fontWeight="bold">Financial Assets</Typography>
           <Grid container spacing={2.5}>
-            {FINANCIAL_FIELDS.map(({ key, label }) => (
-              <Grid size={{ xs: 12, sm: 6 }} key={key}>
-                <CurrencyField
-                  label={label}
-                  value={assets[key]}
-                  onChange={(e) => updateAssets(key, e.target.value)}
-                />
-              </Grid>
-            ))}
+            {FINANCIAL_FIELDS.map(({ key, label }) => {
+              const isDerivedField = key === 'stocks' || key === 'mutualFunds';
+              return (
+                <Grid size={{ xs: 12, sm: 6 }} key={key}>
+                  <CurrencyField
+                    label={label}
+                    value={assets[key]}
+                    onChange={(e) => updateAssets(key, e.target.value)}
+                    helperText={isDerivedField ? "Auto-populated from Investments page, but editable" : undefined}
+                  />
+                </Grid>
+              );
+            })}
           </Grid>
           
           {/* Custom Financial Assets */}

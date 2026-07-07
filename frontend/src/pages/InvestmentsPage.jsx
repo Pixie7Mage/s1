@@ -13,7 +13,6 @@ import {
   Typography,
 } from '@mui/material';
 import CurrencyField from '../components/CurrencyField';
-import DateTextField from '../components/DateTextField';
 import SummaryCard, { SummaryGrid } from '../components/SummaryCard';
 import WizardLayout from '../components/WizardLayout';
 import WizardNav from '../components/WizardNav';
@@ -21,12 +20,11 @@ import { useClientForm } from '../context/ClientFormContext';
 import { useWizardStep } from '../hooks/useWizardStep';
 import {
   calcMfProfitLoss,
-  calcPortfolioCagr,
   calcStockCurrentValue,
   calcStockProfitLoss,
   calcInvestmentTotals,
 } from '../utils/calculations';
-import { formatINR, formatPercent } from '../utils/currency';
+import { formatINR, formatPercent, parseAmount } from '../utils/currency';
 import { getStepIndex } from '../utils/wizardRoutes';
 
 export default function InvestmentsPage() {
@@ -43,7 +41,17 @@ export default function InvestmentsPage() {
   const { errors, snackbar, handleNext, closeSnackbar } = useWizardStep('/investments');
 
   const totals = calcInvestmentTotals(investments);
-  const cagr = calcPortfolioCagr(investments);
+
+  const calcAverageXirr = (items) => {
+    const validItems = (items || []).filter(
+      (item) => item.xirr !== '' && item.xirr !== null && item.xirr !== undefined
+    );
+    if (validItems.length === 0) return 0;
+    const sum = validItems.reduce((s, item) => s + (parseFloat(item.xirr) || 0), 0);
+    return sum / validItems.length;
+  };
+
+  const avgMfXirr = calcAverageXirr(investments.mutualFunds);
 
   return (
     <WizardLayout
@@ -59,9 +67,7 @@ export default function InvestmentsPage() {
           value={totals.totalProfitLoss}
           color={totals.totalProfitLoss >= 0 ? 'success.main' : 'error.main'}
         />
-        {cagr !== null && (
-          <SummaryCard label="Portfolio CAGR" value={formatPercent(cagr)} />
-        )}
+        <SummaryCard label="MF Avg XIRR" value={`${avgMfXirr.toFixed(2)}%`} color="info.main" />
       </SummaryGrid>
 
       <Stack spacing={3}>
@@ -82,6 +88,9 @@ export default function InvestmentsPage() {
               {investments.mutualFunds.map((mf, index) => {
                 const mfErrors = errors.mutualFunds?.[mf.id] || {};
                 const pl = calcMfProfitLoss(mf);
+                const investedNum = parseAmount(mf.investedAmount);
+                const plPct = investedNum > 0 ? (pl / investedNum) * 100 : 0;
+                const formattedPl = pl > 0 ? `+${formatPercent(plPct)}` : formatPercent(plPct);
                 return (
                   <InvestmentCard
                     key={mf.id}
@@ -101,11 +110,13 @@ export default function InvestmentsPage() {
                         />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 6 }}>
-                        <DateTextField
-                          label="Investment Date"
-                          value={mf.investmentDate}
-                          onChange={(e) => updateMutualFund(mf.id, 'investmentDate', e.target.value)}
-                          max={new Date().toISOString().split('T')[0]}
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="XIRR (%)"
+                          value={mf.xirr}
+                          onChange={(e) => updateMutualFund(mf.id, 'xirr', e.target.value)}
+                          inputProps={{ step: 0.01 }}
                         />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
@@ -128,7 +139,7 @@ export default function InvestmentsPage() {
                         <TextField
                           fullWidth
                           label="Profit / Loss"
-                          value={formatINR(pl)}
+                          value={formattedPl}
                           InputProps={{ readOnly: true }}
                         />
                       </Grid>
@@ -160,6 +171,9 @@ export default function InvestmentsPage() {
                 const stErrors = errors.stocks?.[stock.id] || {};
                 const currentValue = calcStockCurrentValue(stock);
                 const pl = calcStockProfitLoss(stock);
+                const costBasis = parseAmount(stock.quantity) * parseAmount(stock.avgBuyPrice);
+                const plPct = costBasis > 0 ? (pl / costBasis) * 100 : 0;
+                const formattedPlPct = pl > 0 ? `+${formatPercent(plPct)}` : formatPercent(plPct);
                 return (
                   <InvestmentCard
                     key={stock.id}
@@ -209,7 +223,7 @@ export default function InvestmentsPage() {
                         <TextField
                           fullWidth
                           label="Current Value / P&L"
-                          value={`${formatINR(currentValue)} (${formatINR(pl)})`}
+                          value={`${formatINR(currentValue)} (${formattedPlPct})`}
                           InputProps={{ readOnly: true }}
                         />
                       </Grid>

@@ -26,7 +26,13 @@ class GenerateReportViewTestCase(APITestCase):
                 "other_expenses": 20000
             },
             "assets": {
-                "total": 5000000
+                "savingsAccount": 100000,
+                "cash": 20000,
+                "sweepInFd": 50000,
+                "liquidMutualFund": 150000,
+                "moneyMarketFund": 0,
+                "overnightMutualFund": 0,
+                "total": 320000
             },
             "liabilities": {
                 "total": 1000000,
@@ -35,11 +41,9 @@ class GenerateReportViewTestCase(APITestCase):
             "goals": [
                 {
                     "name": "Retirement",
-                    "target_year": 2051,
-                    "future_cost": 20000000,
-                    "funding_pct": 50.0,
-                    "corpus_gap": 10000000,
-                    "status": "On Track"
+                    "current_cost": 10000000,
+                    "target_corpus": 20000000,
+                    "interest": 6.0
                 }
             ],
             "investments": {
@@ -47,11 +51,28 @@ class GenerateReportViewTestCase(APITestCase):
                 "stocks": []
             },
             "insurance": {
-                "term_cover": 0,
-                "health_cover": 0
+                "policies": [
+                    {
+                        "policyType": "Term Insurance",
+                        "existingCover": 1000000,
+                        "recommendedCover": 5000000,
+                        "premium": 15000,
+                        "premiumTenure": "20 Years",
+                        "comment": "Good cover"
+                    }
+                ]
             },
             "emergency_fund": {
-                "savingsAccount": 100000
+                "required_fund": 150000,
+                "items": [
+                    {
+                        "name": "Medical Contingency",
+                        "amount": 100000,
+                        "required": 150000,
+                        "gap": 50000,
+                        "where_to_invest": "Savings Account"
+                    }
+                ]
             },
             "assumptions": {
                 "inflation": 6,
@@ -104,4 +125,5 @@ class GenerateReportViewTestCase(APITestCase):
         self.assertIn("1 | Scope of the Report, Key Elements & Assumptions", full_table_text)
         self.assertIn("2 | Personal & Family Details", full_table_text)
         self.assertIn("3 | Income Analysis", full_table_text)
-        self.assertIn("11 | Disclaimer", full_table_text)
+        self.assertIn("10 | Investment Growth Projection at Retirement", full_table_text)
+        self.assertIn("12 | Disclaimer", full_table_text)

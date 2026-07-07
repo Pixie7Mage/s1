@@ -1,18 +1,13 @@
 import {
   Alert,
+  Box,
+  Button,
   Grid,
+  IconButton,
   Snackbar,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Typography,
-  Divider,
-  Button,
-  IconButton,
   TextField,
+  Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -21,170 +16,114 @@ import WizardLayout from '../components/WizardLayout';
 import WizardNav from '../components/WizardNav';
 import { useClientForm } from '../context/ClientFormContext';
 import { useWizardStep } from '../hooks/useWizardStep';
-import {
-  calcRecommendedHealthCover,
-  calcRecommendedTermCover,
-  calcTotalAnnualIncome,
-  calcTotalLiabilities,
-} from '../utils/calculations';
-import { formatINR } from '../utils/currency';
 import { getStepIndex } from '../utils/wizardRoutes';
 
 export default function InsurancePage() {
-  const { formState, updateInsurance } = useClientForm();
-  const { insurance, familyMembers } = formState;
-  const { snackbar, handleNext, closeSnackbar } = useWizardStep('/insurance');
-
-  // Sum predefined liabilities (factor in custom liabilities also if present in formState.liabilities.extra)
-  const totalPredefinedLiabilities = Object.keys(formState.liabilities)
-    .filter(k => k !== 'extra')
-    .reduce((sum, k) => sum + (parseFloat(formState.liabilities[k]) || 0), 0);
-  const totalExtraLiabilities = (formState.liabilities.extra || []).reduce(
-    (sum, item) => sum + (parseFloat(item.amount) || 0),
-    0
-  );
-  const totalLiabilities = totalPredefinedLiabilities + totalExtraLiabilities;
-
-  const totalIncome = calcTotalAnnualIncome(formState.income);
-  const recommendedTerm = calcRecommendedTermCover(totalIncome, totalLiabilities);
-  const recommendedHealth = calcRecommendedHealthCover(1 + familyMembers.length);
-
-  const comparisons = [
-    {
-      type: 'Term Insurance',
-      existing: insurance.termCover,
-      recommended: recommendedTerm,
-      field: 'termCover',
-    },
-    {
-      type: 'Health Insurance',
-      existing: insurance.healthCover,
-      recommended: recommendedHealth,
-      field: 'healthCover',
-    },
-  ];
-
-  const handleAddExtra = () => {
-    const list = [...(insurance.extra || [])];
-    list.push({ id: Date.now(), name: '', amount: '' });
-    updateInsurance('extra', list);
-  };
-
-  const handleUpdateExtra = (id, field, val) => {
-    const list = (insurance.extra || []).map((item) =>
-      item.id === id ? { ...item, [field]: val } : item
-    );
-    updateInsurance('extra', list);
-  };
-
-  const handleRemoveExtra = (id) => {
-    const list = (insurance.extra || []).filter((item) => item.id !== id);
-    updateInsurance('extra', list);
-  };
+  const {
+    formState,
+    updateInsurancePolicy,
+    addInsurancePolicy,
+    removeInsurancePolicy,
+  } = useClientForm();
+  const { insurance } = formState;
+  const { errors, snackbar, handleNext, closeSnackbar } = useWizardStep('/insurance');
 
   return (
     <WizardLayout
       activeStep={getStepIndex('/insurance')}
-      title="Insurance"
-      subtitle="Enter existing insurance coverage. Recommendations are based on income and liabilities."
+      title="Insurance Details"
+      subtitle="Enter details for existing and recommended insurance policies."
     >
       <Stack spacing={4}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Type</TableCell>
-              <TableCell align="right">Existing Cover</TableCell>
-              <TableCell align="right">Recommended Cover</TableCell>
-              <TableCell align="right">Gap</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {comparisons.map(({ type, existing, recommended, field }) => {
-              const existingNum = Number(existing) || 0;
-              const gap = Math.max(0, recommended - existingNum);
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6">Insurance Policies</Typography>
+          <Button
+            startIcon={<AddIcon />}
+            variant="contained"
+            size="small"
+            onClick={() => addInsurancePolicy()}
+          >
+            Add Insurance
+          </Button>
+        </Stack>
+
+        {insurance.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No insurance policies added. Click "Add Insurance" to get started.
+          </Typography>
+        ) : (
+          <Stack spacing={3}>
+            {insurance.map((pol, index) => {
+              const polErrors = errors[pol.id] || {};
               return (
-                <TableRow key={type}>
-                  <TableCell>{type}</TableCell>
-                  <TableCell align="right">
-                    <CurrencyField
-                      label=""
-                      value={existing}
-                      onChange={(e) => updateInsurance(field, e.target.value)}
-                      sx={{ maxWidth: 180 }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">{formatINR(recommended)}</TableCell>
-                  <TableCell align="right" sx={{ color: gap > 0 ? 'error.main' : 'success.main' }}>
-                    {formatINR(gap)}
-                  </TableCell>
-                </TableRow>
+                <InsuranceCard
+                  key={pol.id}
+                  title={pol.policyType || `Policy ${index + 1}`}
+                  onRemove={() => removeInsurancePolicy(pol.id)}
+                >
+                  <Grid container spacing={2.5}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        required
+                        label="Insurance Type / Name"
+                        value={pol.policyType}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'policyType', e.target.value)}
+                        error={Boolean(polErrors.policyType)}
+                        helperText={polErrors.policyType}
+                        placeholder="e.g. Term Insurance, Health Insurance"
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <CurrencyField
+                        label="Existing Cover"
+                        value={pol.existingCover}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'existingCover', e.target.value)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <CurrencyField
+                        label="Recommended Cover"
+                        value={pol.recommendedCover}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'recommendedCover', e.target.value)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <CurrencyField
+                        label="Premium Amount"
+                        value={pol.premium}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'premium', e.target.value)}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        fullWidth
+                        label="Premium Tenure"
+                        value={pol.premiumTenure}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'premiumTenure', e.target.value)}
+                        placeholder="e.g. 20 Years, Till Age 60"
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        label="Comment / Recommendation"
+                        value={pol.comment}
+                        onChange={(e) => updateInsurancePolicy(pol.id, 'comment', e.target.value)}
+                        placeholder="Add comments or recommendations here..."
+                      />
+                    </Grid>
+                  </Grid>
+                </InsuranceCard>
               );
             })}
-          </TableBody>
-        </Table>
-
-        <Stack spacing={2.5}>
-          <Typography variant="h6">Other Insurance</Typography>
-          <Grid container spacing={2.5}>
-            {[
-              { key: 'lic', label: 'LIC' },
-              { key: 'ulip', label: 'ULIP' },
-              { key: 'endowment', label: 'Endowment' },
-              { key: 'others', label: 'Others' },
-            ].map(({ key, label }) => (
-              <Grid size={{ xs: 12, sm: 6 }} key={key}>
-                <CurrencyField
-                  label={label}
-                  value={insurance[key]}
-                  onChange={(e) => updateInsurance(key, e.target.value)}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        </Stack>
-
-        {/* Custom Insurance Policies */}
-        <Stack spacing={2}>
-          <Stack direction="row" justifyContent="flex-start" sx={{ mt: 1 }}>
-            <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={handleAddExtra}>
-              Add Custom Policy
-            </Button>
           </Stack>
-          {(insurance.extra || []).map((item) => (
-            <Grid container spacing={2} key={item.id} alignItems="center">
-              <Grid size={{ xs: 6 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Policy / Insurer Name"
-                  value={item.name}
-                  onChange={(e) => handleUpdateExtra(item.id, 'name', e.target.value)}
-                />
-              </Grid>
-              <Grid size={{ xs: 5 }}>
-                <CurrencyField
-                  size="small"
-                  label="Coverage Amount"
-                  value={item.amount}
-                  onChange={(e) => handleUpdateExtra(item.id, 'amount', e.target.value)}
-                />
-              </Grid>
-              <Grid size={{ xs: 1 }}>
-                <IconButton color="error" onClick={() => handleRemoveExtra(item.id)}>
-                  <DeleteIcon />
-                </IconButton>
-              </Grid>
-            </Grid>
-          ))}
-        </Stack>
+        )}
 
-        <Alert severity="info">
-          Term cover recommendation: max(10× annual income, liabilities + 5× annual income).
-          Health cover: ₹5L base + ₹3L per additional family member.
-        </Alert>
+        <WizardNav currentPath="/insurance" onNext={() => handleNext(formState)} />
       </Stack>
-
-      <WizardNav currentPath="/insurance" onNext={() => handleNext(formState)} />
 
       <Snackbar
         open={snackbar.open}
@@ -197,5 +136,29 @@ export default function InsurancePage() {
         </Alert>
       </Snackbar>
     </WizardLayout>
+  );
+}
+
+function InsuranceCard({ title, onRemove, children }) {
+  return (
+    <Box
+      sx={{
+        p: 2.5,
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
+        bgcolor: 'grey.50',
+      }}
+    >
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+        <Typography variant="subtitle1" fontWeight="bold">
+          {title}
+        </Typography>
+        <IconButton size="small" color="error" onClick={onRemove}>
+          <DeleteIcon />
+        </IconButton>
+      </Stack>
+      {children}
+    </Box>
   );
 }

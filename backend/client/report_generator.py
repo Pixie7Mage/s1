@@ -192,6 +192,49 @@ def _add_pie_chart(doc: Document, labels: list[str], values: list[float], title:
     return True
 
 
+def _add_bar_chart(doc: Document, labels: list[str], current_values: list[float], future_values: list[float], title: str) -> bool:
+    if not any(v > 0 for v in current_values):
+        return False
+        
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(7.2, 4.0), dpi=150)
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
+    
+    ax.bar(x - width/2, current_values, width, label='Current Value', color='#1e3a5f')
+    ax.bar(x + width/2, future_values, width, label='Value at Retirement', color='#0d9488')
+    
+    ax.set_ylabel('Amount (₹)', fontsize=10, fontweight='bold')
+    ax.set_title(title, fontsize=11, fontweight='bold', pad=15)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=9)
+    ax.legend(frameon=True, facecolor='#f8fafc', edgecolor='#e2e8f0', fontsize=9)
+    
+    def format_y_ticks(tick_val, pos):
+        if tick_val >= 10_000_000:
+            return f'{tick_val / 10_000_000:.1f} Cr'
+        elif tick_val >= 100_000:
+            return f'{tick_val / 100_000:.1f} L'
+        return f'{tick_val:,.0f}'
+        
+    ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(format_y_ticks))
+    
+    plt.tight_layout()
+    
+    img_stream = io.BytesIO()
+    plt.savefig(img_stream, format='png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    img_stream.seek(0)
+    
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run()
+    run.add_picture(img_stream, width=Inches(5.5))
+    return True
+
+
 def calculate_sip(gap: float, rate: float, years: float) -> float:
     if years <= 0 or rate <= 0:
         return gap / (years * 12) if years > 0 else gap
@@ -286,8 +329,9 @@ def generate_report(data: dict) -> bytes:
         ("7", "Asset Allocation"),
         ("8", "Emergency Planning"),
         ("9", "Goals Summary & Recommendation"),
-        ("10", "Insurance Planning"),
-        ("11", "Disclaimer"),
+        ("10", "Investment Growth Projection at Retirement"),
+        ("11", "Insurance Planning"),
+        ("12", "Disclaimer"),
     ]
 
     for s_no, name_content in sections:
@@ -388,12 +432,12 @@ def generate_report(data: dict) -> bytes:
     else:
         _para(doc, "No family members recorded.")
 
-    # Risk Profile
-    risk_profile_text = assumptions.get("riskProfile", assumptions.get("risk_profile", ""))
-    if risk_profile_text:
+    # Client Review
+    client_review_text = assumptions.get("clientReview", assumptions.get("client_review", assumptions.get("riskProfile", assumptions.get("risk_profile", ""))))
+    if client_review_text:
         doc.add_paragraph()
-        _heading(doc, "Your Risk Profile", level=2)
-        for line in risk_profile_text.split("\n"):
+        _heading(doc, "Client Review", level=2)
+        for line in client_review_text.split("\n"):
             line_stripped = line.strip()
             if line_stripped.startswith("-"):
                 p = doc.add_paragraph(style='List Bullet')
@@ -805,31 +849,46 @@ def generate_report(data: dict) -> bytes:
     doc.add_paragraph()
     
     ef_data = data.get("emergency_fund", {})
-    predefined_ef = sum(_num(ef_data.get(k, 0)) for k in ["cash", "savingsAccount", "savings_account", "liquidMutualFunds", "liquid_mutual_funds", "fixedDeposits", "fixed_deposits"])
-    extra_ef = ef_data.get("extra", [])
-    if not isinstance(extra_ef, list):
-        extra_ef = []
-    total_extra_ef = _sum_extra(extra_ef)
-    available_ef = predefined_ef + total_extra_ef
+    required_ef = _num(ef_data.get("required_fund", 0))
+    ef_items = ef_data.get("items", [])
+    if not isinstance(ef_items, list):
+        ef_items = []
+        
+    assets = data.get("assets", {})
+    available_ef = (
+        _num(assets.get("savingsAccount", 0)) +
+        _num(assets.get("cash", 0)) +
+        _num(assets.get("sweepInFd", 0)) +
+        _num(assets.get("liquidMutualFund", 0)) +
+        _num(assets.get("moneyMarketFund", 0)) +
+        _num(assets.get("overnightMutualFund", 0))
+    )
     
-    _para(doc, f"Emergency Fund Required ({req_months} Months): {format_inr(req_ef)}")
-    _para(doc, f"Emergency Fund Available: {format_inr(available_ef)}")
-    gap_ef = max(0.0, req_ef - available_ef)
-    _para(doc, f"Emergency Fund Gap: {format_inr(gap_ef)}", bold=True)
+    total_gap = max(0.0, required_ef - available_ef)
+    
+    _para(doc, f"Total Emergency Fund Available: {format_inr(available_ef)}")
+    _para(doc, f"Total Emergency Fund Required: {format_inr(required_ef)}")
+    _para(doc, f"Total Emergency Fund Gap: {format_inr(total_gap)}", bold=True)
     doc.add_paragraph()
     
-    _heading(doc, "Expert's Recommendation", level=2)
-    _para(doc, "Invest 10% of this in your savings account and rest in a Liquid Fund.")
-    t_ef = doc.add_table(rows=1, cols=3)
-    _set_table_borders(t_ef)
-    hdr_ef = t_ef.rows[0].cells
-    hdr_ef[0].text = "Recommended Fund"
-    hdr_ef[1].text = "Percentage"
-    hdr_ef[2].text = "Amount (₹)"
-    _style_table_headers(t_ef.rows[0])
-                
-    _table_row(t_ef, "Savings Account", "10 %", format_inr(req_ef * 0.10))
-    _table_row(t_ef, "Liquid Mutual Funds / Fixed Deposits", "90 %", format_inr(req_ef * 0.90))
+    _heading(doc, "Manually Target Contingencies List", level=2)
+    if not ef_items:
+        _para(doc, "No emergency contingencies specified.")
+    else:
+        t_ef = doc.add_table(rows=1, cols=5)
+        _set_table_borders(t_ef)
+        headers_ef = ["Emergency Name", "Available (₹)", "Required (₹)", "Gap (₹)", "Where to Invest"]
+        for i, h in enumerate(headers_ef):
+            t_ef.rows[0].cells[i].text = h
+        _style_table_headers(t_ef.rows[0])
+        
+        for item in ef_items:
+            name = item.get("name", "")
+            avail = _num(item.get("amount", 0))
+            req = _num(item.get("required", 0))
+            gap = max(0.0, req - avail)
+            invest_to = item.get("where_to_invest", "")
+            _table_row(t_ef, name, format_inr(avail), format_inr(req), format_inr(gap), invest_to)
 
     doc.add_page_break()
 
@@ -840,130 +899,164 @@ def generate_report(data: dict) -> bytes:
     if not goals:
         _para(doc, "No goals specified.")
     else:
-        t_goals = doc.add_table(rows=1, cols=7)
+        t_goals = doc.add_table(rows=1, cols=4)
         _set_table_borders(t_goals)
-        headers_goals = ["Goal Name", "Year To Goal", "Present Cost (₹)", "Future Cost (₹)", "Funding %", "Gap (₹)", "Status"]
+        headers_goals = ["Goal Name", "Current Cost (₹)", "Target Corpus (₹)", "Interest (%)"]
         for i, h in enumerate(headers_goals):
             t_goals.rows[0].cells[i].text = h
         _style_table_headers(t_goals.rows[0])
                     
-        curr_year = date.today().year
         for goal in goals:
-            target_yr = int(goal.get("target_year", curr_year + 10))
-            years = max(1, target_yr - curr_year)
             pres_cost = _num(goal.get("current_cost", 0))
-            inf_rate = _num(goal.get("inflation_rate", 7.0))
-            fut_cost = _num(goal.get("future_cost", pres_cost * ((1 + inf_rate/100) ** years)))
-            exist_inv = _num(goal.get("existing_investment", 0))
-            gap = max(0.0, fut_cost - exist_inv)
-            fund_pct = (exist_inv / fut_cost * 100) if fut_cost > 0 else 100.0
+            target_corp = _num(goal.get("target_corpus", 0))
+            interest_rate = _num(goal.get("interest", 0))
             
-            _table_row(t_goals, goal.get("name", ""), str(target_yr), format_inr(pres_cost), format_inr(fut_cost), f"{fund_pct:.1f}%", format_inr(gap), goal.get("status", "Critical"))
+            _table_row(t_goals, goal.get("name", ""), format_inr(pres_cost), format_inr(target_corp), f"{interest_rate}%")
 
+    doc.add_page_break()
+
+    # SECTION 10: Investment Growth Projection at Retirement
+    personal = data.get("personal", {})
+    age = _num(personal.get("age", 35))
+    ret_age = _num(personal.get("retirement_age", 0))
+    if ret_age <= 0:
+        ret_age = max(60, age + 5)
+    years = max(0, int(ret_age - age))
+    
+    assumptions = data.get("assumptions", {})
+    eq_rate = _num(assumptions.get("equity", 12.0))
+    d_rate = _num(assumptions.get("debt", 7.0))
+    g_rate = _num(assumptions.get("gold", 8.0))
+    inf_rate = _num(assumptions.get("inflation", 6.0))
+
+    assets = data.get("assets", {})
+    cash_val = _val(assets, "cash", "cash") + _val(assets, "savingsAccount", "savings_account")
+    debt_val = (_val(assets, "fd", "fd") + _val(assets, "epf", "epf") + 
+                _val(assets, "nps", "nps") + _val(assets, "postalSavings", "postal_savings") + 
+                _val(assets, "eps", "eps"))
+    equity_val = (_val(assets, "mutualFunds", "mutual_funds") + 
+                  _val(assets, "stocks", "stocks") + 
+                  _val(assets, "esops", "esops"))
+    gold_val = _val(assets, "gold", "gold") + _val(assets, "commodity", "commodity") + _val(assets, "jewellery", "jewellery")
+    real_estate_val = _val(assets, "realEstate", "real_estate")
+    
+    extra_fin = assets.get("extraFinancial", assets.get("extra_financial", []))
+    if not isinstance(extra_fin, list):
+        extra_fin = []
+    for item in extra_fin:
+        name_lower = item.get("name", "").lower()
+        val = _num(item.get("amount", item.get("value", 0)))
+        if "cash" in name_lower or "saving" in name_lower:
+            cash_val += val
+        elif "equity" in name_lower or "stock" in name_lower or "fund" in name_lower:
+            equity_val += val
+        elif "gold" in name_lower or "silver" in name_lower or "commodity" in name_lower:
+            gold_val += val
+        else:
+            debt_val += val
+
+    extra_fix = assets.get("extraFixed", assets.get("extra_fixed", []))
+    if not isinstance(extra_fix, list):
+        extra_fix = []
+    for item in extra_fix:
+        name_lower = item.get("name", "").lower()
+        val = _num(item.get("amount", item.get("value", 0)))
+        if "real" in name_lower or "estate" in name_lower or "property" in name_lower or "land" in name_lower:
+            real_estate_val += val
+        elif "gold" in name_lower or "silver" in name_lower or "jewel" in name_lower:
+            gold_val += val
+        else:
+            real_estate_val += val
+
+    fut_equity = equity_val * ((1 + eq_rate / 100) ** years)
+    fut_debt = debt_val * ((1 + d_rate / 100) ** years)
+    fut_gold = gold_val * ((1 + g_rate / 100) ** years)
+    fut_cash = cash_val * ((1 + d_rate / 100) ** years)
+    fut_real_estate = real_estate_val * ((1 + inf_rate / 100) ** years)
+    
+    total_current = equity_val + debt_val + gold_val + cash_val + real_estate_val
+    total_future = fut_equity + fut_debt + fut_gold + fut_cash + fut_real_estate
+
+    _heading(doc, "10. Investment Growth Projection at Retirement")
+    
+    intro_txt = (
+        f"This section projects how your current financial investments will grow from your current age "
+        f"of {age:.0f} to your targeted retirement age of {ret_age:.0f} (over {years} years). The calculations "
+        f"compound your assets annually based on return rate assumptions specified in the Assumptions section."
+    )
+    _para(doc, intro_txt)
+    doc.add_paragraph()
+    
+    if years > 0:
+        labels_chart = ["Equity", "Debt", "Gold", "Cash/Savings", "Real Estate"]
+        current_vals = [equity_val, debt_val, gold_val, cash_val, real_estate_val]
+        future_vals = [fut_equity, fut_debt, fut_gold, fut_cash, fut_real_estate]
+        _add_bar_chart(doc, labels_chart, current_vals, future_vals, "Investment Wealth Growth Projection")
         doc.add_paragraph()
         
-        eq_rate = _num(assumptions.get("equity", 12.0)) / 100
-        d_rate = _num(assumptions.get("debt", 7.0)) / 100
+        t_proj = doc.add_table(rows=1, cols=4)
+        _set_table_borders(t_proj)
+        hdr_proj = t_proj.rows[0].cells
+        hdr_proj[0].text = "Asset Class"
+        hdr_proj[1].text = "Current Value (₹)"
+        hdr_proj[2].text = "Assumed Return (%)"
+        hdr_proj[3].text = "Projected Value (₹)"
+        _style_table_headers(t_proj.rows[0])
         
-        for idx, goal in enumerate(goals):
-            target_yr = int(goal.get("target_year", curr_year + 10))
-            years = max(1, target_yr - curr_year)
-            pres_cost = _num(goal.get("current_cost", 0))
-            inf_rate = _num(goal.get("inflation_rate", 7.0))
-            fut_cost = _num(goal.get("future_cost", pres_cost * ((1 + inf_rate/100) ** years)))
-            exist_inv = _num(goal.get("existing_investment", 0))
-            gap = max(0.0, fut_cost - exist_inv)
-            
-            exp_ret_val = get_expected_return(years, eq_rate, d_rate)
-            sip_req = calculate_sip(gap, exp_ret_val, years)
-            lump_req = calculate_lumpsum(gap, exp_ret_val, years)
-            
-            _heading(doc, f"{idx+1}. {goal.get('name', 'Goal')}", level=2)
-            
-            t_gdetail = doc.add_table(rows=1, cols=8)
-            _set_table_borders(t_gdetail)
-            g_hdrs = ["Year To Goal", "Present Cost (₹)", "Future Cost (₹)", "Inflation", "Tagged Assets (₹)", "Expected Return", "Future Value Tagged (₹)", "Deficit (₹)"]
-            for i, gh in enumerate(g_hdrs):
-                t_gdetail.rows[0].cells[i].text = gh
-            _style_table_headers(t_gdetail.rows[0])
-            
-            fv_tagged = exist_inv * ((1 + exp_ret_val) ** years)
-            _table_row(t_gdetail, str(years), format_inr(pres_cost), format_inr(fut_cost), f"{inf_rate}%", format_inr(exist_inv), f"{exp_ret_val*100:.1f}%", format_inr(fv_tagged), format_inr(gap))
-            doc.add_paragraph()
-            
-            _heading(doc, f"{idx+1}.1 Investment Options For This Goal", level=3)
-            t_gopt = doc.add_table(rows=1, cols=4)
-            _set_table_borders(t_gopt)
-            opt_hdrs = ["Lumpsum (₹)", "SIP (₹)", "Step Up SIP (₹)", "Expected Return"]
-            for i, oh in enumerate(opt_hdrs):
-                t_gopt.rows[0].cells[i].text = oh
-            _style_table_headers(t_gopt.rows[0])
-                        
-            _table_row(t_gopt, format_inr(lump_req), format_inr(sip_req), format_inr(sip_req * 0.90), f"{exp_ret_val*100:.1f}%")
-            doc.add_paragraph()
-            
-            _heading(doc, f"{idx+1}.2 Expert's Recommendation", level=3)
-            rec_class = "Equity" if years > 7 else ("Hybrid" if years > 3 else "Debt")
-            _para(doc, f"Recommend monthly SIP of {format_inr(sip_req)} in {rec_class} Mutual Funds/Bonds to reach your goal target.")
-            doc.add_paragraph()
+        _table_row(t_proj, "Equity (Mutual Funds, Stocks, ESOPs)", format_inr(equity_val), f"{eq_rate}%", format_inr(fut_equity))
+        _table_row(t_proj, "Debt (FD, EPF, NPS, Postal)", format_inr(debt_val), f"{d_rate}%", format_inr(fut_debt))
+        _table_row(t_proj, "Gold & Jewellery", format_inr(gold_val), f"{g_rate}%", format_inr(fut_gold))
+        _table_row(t_proj, "Cash & Savings Account", format_inr(cash_val), f"{d_rate}%", format_inr(fut_cash))
+        _table_row(t_proj, "Real Estate", format_inr(real_estate_val), f"{inf_rate}%", format_inr(fut_real_estate))
+        
+        _table_row(t_proj, "Total Assets", format_inr(total_current), "", format_inr(total_future))
+        for cell in t_proj.rows[-1].cells:
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.bold = True
+    else:
+        _para(doc, "Growth calculations are skipped since years to retirement is 0.")
 
     doc.add_page_break()
 
-    # SECTION 10: Insurance Planning
-    _heading(doc, "10. Insurance Planning")
+    # SECTION 11: Insurance Planning
+    _heading(doc, "11. Insurance Planning")
     
-    _heading(doc, "Life Insurance", level=2)
     insurance = data.get("insurance", {})
-    family_count = 1 + len(family)
-    
-    rec_term = recommended_term_cover(total_income, tot_liab_val)
-    rec_health = recommended_health_cover(family_count)
-    
-    t_ins = doc.add_table(rows=1, cols=2)
-    _set_table_borders(t_ins)
-    hdr_ins = t_ins.rows[0].cells
-    hdr_ins[0].text = "Description"
-    hdr_ins[1].text = "Value (₹)"
-    _style_table_headers(t_ins.rows[0])
-                
-    _table_row(t_ins, "Current annual income of the insured", format_inr(total_income))
-    _table_row(t_ins, "Current age of the insured", str(personal.get("age", "")))
-    _table_row(t_ins, "Expected retirement age of the insured", str(personal.get("retirement_age", "")))
-    
-    working_years = max(1.0, float(personal.get("retirement_age", 60)) - float(personal.get("age", 35)))
-    hlv = total_income * working_years
-    _table_row(t_ins, "Estimated Human Life Value", format_inr(hlv))
-    
-    predefined_term = _val(insurance, "termCover", "term_cover")
-    extra_term_list = insurance.get("extra", [])
-    if not isinstance(extra_term_list, list):
-        extra_term_list = []
-    extra_term = _sum_extra(extra_term_list)
-    ext_term = predefined_term + extra_term
-    
-    _table_row(t_ins, "Insurance cover already taken", format_inr(ext_term))
-    _table_row(t_ins, "Value of existing assets and investments", format_inr(tot_assets_val))
-    
-    net_term_gap = max(0.0, rec_term - ext_term)
-    _table_row(t_ins, "Net additional insurance cover to be taken", format_inr(net_term_gap))
-    doc.add_paragraph()
-    
-    _heading(doc, "Health Insurance", level=2)
-    predefined_health = _val(insurance, "healthCover", "health_cover")
-    ext_health = predefined_health # health cover is a base field
-    
-    _para(doc, f"Currently you have {format_inr(ext_health)} medical cover.")
-    _para(doc, f"Ideal/Recommended Medical cover for whole family is: {format_inr(rec_health)}")
-    _para(doc, f"Health Insurance Gap: {format_inr(max(0.0, rec_health - ext_health))}", bold=True)
-    doc.add_paragraph()
-    
-    _heading(doc, "Expert's Recommendation", level=3)
-    _para(doc, "You should choose a term plan and a family floater health plan to cover yourself and your family dependents against any unforeseen life or medical events.")
+    policies = insurance.get("policies", [])
+    if not isinstance(policies, list):
+        policies = []
+        
+    if not policies:
+        _para(doc, "No insurance policies added.")
+    else:
+        t_ins = doc.add_table(rows=1, cols=6)
+        _set_table_borders(t_ins)
+        hdr_ins = t_ins.rows[0].cells
+        hdr_ins[0].text = "Insurance Type"
+        hdr_ins[1].text = "Existing Cover"
+        hdr_ins[2].text = "Recommended Cover"
+        hdr_ins[3].text = "Premium Amount"
+        hdr_ins[4].text = "Premium Tenure"
+        hdr_ins[5].text = "Comment / Recommendation"
+        _style_table_headers(t_ins.rows[0])
+        
+        for pol in policies:
+            _table_row(
+                t_ins,
+                str(pol.get("policyType", "")),
+                format_inr(float(pol.get("existingCover", 0.0) or 0.0)),
+                format_inr(float(pol.get("recommendedCover", 0.0) or 0.0)),
+                format_inr(float(pol.get("premium", 0.0) or 0.0)),
+                str(pol.get("premiumTenure", "")),
+                str(pol.get("comment", ""))
+            )
+        doc.add_paragraph()
 
     doc.add_page_break()
 
-    # SECTION 11: Disclaimer
-    _heading(doc, "11. Disclaimer")
+    # SECTION 12: Disclaimer
+    _heading(doc, "12. Disclaimer")
     disclaimer_text = (
         "This financial plan was developed using information provided by you. Our Estimates of future returns and "
         "inflation parameters, using past history and reliable sources, play a significant part in the plan. While the "
@@ -975,8 +1068,8 @@ def generate_report(data: dict) -> bytes:
         "All the calculations are done based on our proprietary algorithms and programs. As with other computer "
         "applications, these programs are subject to errors due to various reasons such as malware attack, hacking, "
         "human errors etc. Though we take the highest care to keep your information secured and making sure our "
-        "algorithm works fine, still please do not consider this report as Final Financial Advice. There is no human "
-        "review, which has happened to this report and hence it is prone to system errors.\n"
+        "algorithm works fine, still please do not consider this report as Final Financial Advice. There is human "
+        "review, which has happened to this report but may prone to errors.\n"
         "Suggested Financial Plan to achieve your financial goals may not be accurate or yield expected results if "
         "the information provided by you is incorrect or any of the assumptions made are rendered invalid due to "
         "uncontrollable external forces, like change in interest rates, change in govt policies etc.\n"
@@ -985,7 +1078,7 @@ def generate_report(data: dict) -> bytes:
         "help you fulfil your financial objectives.Information provided in the attached report is general in nature and "
         "should NOT be construed as providing legal, accounting, investment and / or tax advice.Should you have "
         "any specific questions and / or issues in these areas, please consult your legal, tax, investment and / or "
-        "accounting advisor. Yadnya Academy cannot endorse or support any specific decision you may make "
+        "accounting advisor. Savart One cannot endorse or support any specific decision you may make "
         "because we are not privy to all the other information that effective financial decision making requires."
     )
     _para(doc, disclaimer_text)

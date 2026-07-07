@@ -4,6 +4,7 @@ import {
   calcTotalAssets,
   calcTotalLiabilities,
   calcGoalMetrics,
+  getDerivedAssets,
 } from './calculations';
 import { parseAmount } from './currency';
 
@@ -101,7 +102,8 @@ export function validateGoalsForm(formState) {
     const goalErrors = {};
     if (!goal.name?.trim()) goalErrors.name = 'Goal name is required';
     if (!goal.currentCost?.trim()) goalErrors.currentCost = 'Current cost is required';
-    if (!goal.targetYear?.trim()) goalErrors.targetYear = 'Target year is required';
+    if (!goal.targetCorpus?.trim()) goalErrors.targetCorpus = 'Target corpus is required';
+    if (!goal.interest?.trim()) goalErrors.interest = 'Interest % is required';
     if (Object.keys(goalErrors).length > 0) errors[goal.id] = goalErrors;
   });
   return { isValid: Object.keys(errors).length === 0, errors };
@@ -126,12 +128,37 @@ export function validateInvestmentsForm(formState) {
   return { isValid: !hasErrors, errors };
 }
 
-export function validateInsuranceForm() {
-  return { isValid: true, errors: {} };
+export function validateInsuranceForm(formState) {
+  const errors = {};
+  const policies = formState.insurance || [];
+  policies.forEach((pol) => {
+    if (!pol.policyType?.trim()) {
+      errors[pol.id] = { policyType: 'Required' };
+    }
+  });
+  return { isValid: Object.keys(errors).length === 0, errors };
 }
 
-export function validateEmergencyFundForm() {
-  return { isValid: true, errors: {} };
+export function validateEmergencyFundForm(formState) {
+  const errors = {};
+  const ef = formState.emergencyFund || {};
+  
+  if (!ef.requiredFund?.trim()) {
+    errors.requiredFund = 'Required emergency fund target is required';
+  }
+  
+  const items = ef.items || [];
+  items.forEach((item) => {
+    const itemErrors = {};
+    if (!item.name?.trim()) itemErrors.name = 'Name is required';
+    if (!item.amount?.trim()) itemErrors.amount = 'Amount is required';
+    if (!item.required?.trim()) itemErrors.required = 'Required target is required';
+    if (!item.whereToInvest?.trim()) itemErrors.whereToInvest = 'Where to invest is required';
+    if (Object.keys(itemErrors).length > 0) {
+      errors[item.id] = itemErrors;
+    }
+  });
+  return { isValid: Object.keys(errors).length === 0, errors };
 }
 
 export function validateAssumptionsForm(formState) {
@@ -179,7 +206,8 @@ export function buildClientPayload(formState) {
   const { personal, familyMembers } = formState;
   const totalIncome = calcTotalAnnualIncome(formState.income);
   const annualExpenses = calcAnnualExpenses(formState.expenses);
-  const totalAssets = calcTotalAssets(formState.assets);
+  const derivedAssets = getDerivedAssets(formState);
+  const totalAssets = calcTotalAssets(derivedAssets);
   const totalLiabilities = calcTotalLiabilities(formState.liabilities);
 
   return {
@@ -222,7 +250,7 @@ export function buildClientPayload(formState) {
     },
     assets: {
       ...Object.fromEntries(
-        Object.entries(formState.assets).map(([k, v]) => [k, parseAmount(v)]),
+        Object.entries(derivedAssets).map(([k, v]) => [k, parseAmount(v)]),
       ),
       total: totalAssets,
     },
@@ -234,19 +262,12 @@ export function buildClientPayload(formState) {
       net_worth: totalAssets - totalLiabilities,
     },
     goals: formState.goals.map((goal) => {
-      const metrics = calcGoalMetrics(goal, formState.assumptions);
       return {
         name: goal.name,
         template_key: goal.templateKey || null,
         current_cost: parseAmount(goal.currentCost),
-        target_year: Number(goal.targetYear),
-        inflation_rate: parseAmount(goal.inflationRate),
-        existing_investment: parseAmount(goal.existingInvestment),
-        future_cost: metrics.futureCost,
-        target_corpus: metrics.targetCorpus,
-        funding_pct: metrics.fundingPct,
-        corpus_gap: metrics.corpusGap,
-        status: metrics.status,
+        target_corpus: parseAmount(goal.targetCorpus),
+        interest: parseAmount(goal.interest),
       };
     }),
     investments: {
@@ -254,7 +275,7 @@ export function buildClientPayload(formState) {
         scheme_name: mf.schemeName,
         invested_amount: parseAmount(mf.investedAmount),
         current_value: parseAmount(mf.currentValue),
-        investment_date: mf.investmentDate || null,
+        xirr: parseAmount(mf.xirr),
         profit_loss: parseAmount(mf.currentValue) - parseAmount(mf.investedAmount),
       })),
       stocks: formState.investments.stocks.map((s) => ({
@@ -263,23 +284,42 @@ export function buildClientPayload(formState) {
         avg_buy_price: parseAmount(s.avgBuyPrice),
         current_market_price: parseAmount(s.currentMarketPrice),
         current_value: parseAmount(s.quantity) * parseAmount(s.currentMarketPrice),
+        xirr: 0,
         profit_loss:
           parseAmount(s.quantity) * parseAmount(s.currentMarketPrice) -
           parseAmount(s.quantity) * parseAmount(s.avgBuyPrice),
       })),
     },
-    insurance: Object.fromEntries(
-      Object.entries(formState.insurance).map(([k, v]) => [k, parseAmount(v)]),
-    ),
-    emergency_fund: Object.fromEntries(
-      Object.entries(formState.emergencyFund).map(([k, v]) => [k, parseAmount(v)]),
-    ),
+    insurance: {
+      policies: (formState.insurance || []).map((pol) => ({
+        policyType: pol.policyType?.trim() || '',
+        existingCover: parseAmount(pol.existingCover),
+        recommendedCover: parseAmount(pol.recommendedCover),
+        premium: parseAmount(pol.premium),
+        premiumTenure: pol.premiumTenure?.trim() || '',
+        comment: pol.comment?.trim() || '',
+      })),
+    },
+    emergency_fund: {
+      required_fund: parseAmount(formState.emergencyFund.requiredFund),
+      items: (formState.emergencyFund.items || []).map((item) => {
+        const amt = parseAmount(item.amount);
+        const req = parseAmount(item.required);
+        return {
+          name: item.name,
+          amount: amt,
+          required: req,
+          gap: Math.max(0, req - amt),
+          where_to_invest: item.whereToInvest,
+        };
+      }),
+    },
     assumptions: Object.fromEntries(
       Object.entries(formState.assumptions).map(([k, v]) => {
         if (k === 'emergencyFundMonths') {
           return [k, Number(v)];
         }
-        if (k === 'riskProfile') {
+        if (k === 'riskProfile' || k === 'clientReview') {
           return [k, String(v)];
         }
         return [k, parseAmount(v)];

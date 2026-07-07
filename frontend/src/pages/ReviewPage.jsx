@@ -31,11 +31,11 @@ import { useClientForm } from '../context/ClientFormContext';
 import {
   calcAnnualExpenses,
   calcAnnualSavings,
-  calcGoalMetrics,
   calcNetWorth,
   calcTotalAnnualIncome,
   calcTotalAssets,
   calcTotalLiabilities,
+  getDerivedAssets,
 } from '../utils/calculations';
 import { formatINR, formatPercent, parseAmount } from '../utils/currency';
 import { getStepIndex } from '../utils/wizardRoutes';
@@ -48,17 +48,20 @@ export default function ReviewPage() {
   const {
     personal,
     familyMembers,
-    assets,
+    income,
+    expenses,
     liabilities,
     goals,
     assumptions,
   } = formState;
 
+  const assets = getDerivedAssets(formState);
+
   const [generating, setGenerating] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
 
-  const totalIncome = calcTotalAnnualIncome(formState.income);
-  const annualExpenses = calcAnnualExpenses(formState.expenses);
+  const totalIncome = calcTotalAnnualIncome(income);
+  const annualExpenses = calcAnnualExpenses(expenses);
   const annualSavings = calcAnnualSavings(totalIncome, annualExpenses);
   const totalAssets = calcTotalAssets(assets);
   const totalLiabilities = calcTotalLiabilities(liabilities);
@@ -122,13 +125,13 @@ export default function ReviewPage() {
     labels: goals.map((g) => g.name || 'Goal'),
     datasets: [
       {
-        label: 'Future Cost',
-        data: goals.map((g) => calcGoalMetrics(g, assumptions).futureCost),
+        label: 'Current Cost',
+        data: goals.map((g) => parseAmount(g.currentCost)),
         backgroundColor: '#1e3a5f',
       },
       {
-        label: 'Existing Investment',
-        data: goals.map((g) => parseAmount(g.existingInvestment)),
+        label: 'Target Corpus',
+        data: goals.map((g) => parseAmount(g.targetCorpus)),
         backgroundColor: '#0d9488',
       },
     ],
@@ -279,12 +282,11 @@ export default function ReviewPage() {
           ) : (
             <List dense disablePadding>
               {goals.map((g) => {
-                const m = calcGoalMetrics(g, assumptions);
                 return (
                   <ListItem key={g.id} disableGutters>
                     <ListItemText
                       primary={g.name}
-                      secondary={`Target ${g.targetYear} · Future cost ${formatINR(m.futureCost)} · Funding ${formatPercent(m.fundingPct)} · ${m.status}`}
+                      secondary={`Current Cost: ${formatINR(g.currentCost)} · Target Corpus: ${formatINR(g.targetCorpus)} · Interest: ${g.interest}%`}
                     />
                   </ListItem>
                 );

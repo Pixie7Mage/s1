@@ -152,7 +152,7 @@ export default function ReviewPage() {
     const payload = buildClientPayload(formState);
 
     try {
-      const response = await fetch('/api/generate-report/', {
+      const response = await fetch('https://report-gb8i.onrender.com/api/generate-report/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
